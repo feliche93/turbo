@@ -1,3 +1,4 @@
+use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, Value};
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::FileSystemPathVc;
@@ -12,9 +13,9 @@ use turbopack_core::environment::{
 use turbopack_ecmascript::EcmascriptInputTransform;
 use turbopack_node::execution_context::ExecutionContextVc;
 
+use super::transforms::get_next_server_transforms_rules;
 use crate::{
     next_build::get_postcss_package_mapping,
-    next_client::context::add_next_font_transform,
     next_config::NextConfigVc,
     next_import_map::{get_next_build_import_map, get_next_server_import_map},
 };
@@ -23,6 +24,7 @@ use crate::{
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord)]
 pub enum ServerContextType {
     Pages { pages_dir: FileSystemPathVc },
+    PagesData { pages_dir: FileSystemPathVc },
     AppSSR { app_dir: FileSystemPathVc },
     AppRSC { app_dir: FileSystemPathVc },
 }
@@ -35,7 +37,9 @@ pub fn get_server_resolve_options_context(
 ) -> ResolveOptionsContextVc {
     let next_server_import_map = get_next_server_import_map(project_path, ty, next_config);
     match ty.into_value() {
-        ServerContextType::Pages { .. } | ServerContextType::AppSSR { .. } => {
+        ServerContextType::Pages { .. }
+        | ServerContextType::PagesData { .. }
+        | ServerContextType::AppSSR { .. } => {
             let resolve_options_context = ResolveOptionsContext {
                 enable_node_modules: true,
                 enable_node_externals: true,
@@ -90,7 +94,9 @@ pub fn get_server_environment(
             NodeJsEnvironmentVc::current(process_env, server_addr),
         )),
         match ty.into_value() {
-            ServerContextType::Pages { .. } => Value::new(EnvironmentIntention::ServerRendering),
+            ServerContextType::Pages { .. } | ServerContextType::PagesData { .. } => {
+                Value::new(EnvironmentIntention::ServerRendering)
+            }
             ServerContextType::AppSSR { .. } => Value::new(EnvironmentIntention::Prerendering),
             ServerContextType::AppRSC { .. } => Value::new(EnvironmentIntention::ServerRendering),
         },
@@ -98,13 +104,15 @@ pub fn get_server_environment(
 }
 
 #[turbo_tasks::function]
-pub fn get_server_module_options_context(
+pub async fn get_server_module_options_context(
     project_path: FileSystemPathVc,
     execution_context: ExecutionContextVc,
     ty: Value<ServerContextType>,
-) -> ModuleOptionsContextVc {
+) -> Result<ModuleOptionsContextVc> {
+    let custom_rules = get_next_server_transforms_rules(ty.into_value()).await?;
+
     let module_options_context = match ty.into_value() {
-        ServerContextType::Pages { .. } => {
+        ServerContextType::Pages { .. } | ServerContextType::PagesData { .. } => {
             let module_options_context = ModuleOptionsContext {
                 execution_context: Some(execution_context),
                 ..Default::default()
@@ -121,6 +129,7 @@ pub fn get_server_module_options_context(
                     ContextCondition::InDirectory("node_modules".to_string()),
                     module_options_context.clone().cell(),
                 )],
+                custom_rules,
                 ..module_options_context
             }
         }
@@ -141,6 +150,7 @@ pub fn get_server_module_options_context(
                     ContextCondition::InDirectory("node_modules".to_string()),
                     module_options_context.clone().cell(),
                 )],
+                custom_rules,
                 ..module_options_context
             }
         }
@@ -163,13 +173,14 @@ pub fn get_server_module_options_context(
                     ContextCondition::InDirectory("node_modules".to_string()),
                     module_options_context.clone().cell(),
                 )],
+                custom_rules,
                 ..module_options_context
             }
         }
     }
     .cell();
 
-    add_next_font_transform(module_options_context)
+    Ok(module_options_context)
 }
 
 #[turbo_tasks::function]

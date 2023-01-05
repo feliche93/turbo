@@ -3558,6 +3558,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "next-transform-dynamic"
+version = "0.1.0"
+dependencies = [
+ "pathdiff",
+ "swc_core",
+ "testing",
+]
+
+[[package]]
 name = "next-transform-strip-page-exports"
 version = "0.1.0"
 dependencies = [
@@ -7412,6 +7421,7 @@ dependencies = [
  "indexmap",
  "lazy_static",
  "next-font",
+ "next-transform-dynamic",
  "next-transform-strip-page-exports",
  "num-bigint",
  "once_cell",
