@@ -39,7 +39,8 @@ pub async fn get_fallback_page(
     let resolve_options_context = get_client_resolve_options_context(project_path, ty);
     let module_options_context =
         get_client_module_options_context(project_path, execution_context, environment, ty);
-    let chunking_context = get_client_chunking_context(project_path, dev_server_root, ty);
+    let chunking_context =
+        get_client_chunking_context(project_path, dev_server_root, environment, ty);
     let entries = get_client_runtime_entries(project_path, env, ty, next_config);
 
     let mut import_map = ImportMap::empty();
